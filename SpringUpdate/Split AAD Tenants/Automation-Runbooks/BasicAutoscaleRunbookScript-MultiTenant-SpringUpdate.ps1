@@ -1,19 +1,20 @@
-$HostpoolName = "Spring"
-$BeginPeakDateTime = "7:30"
-$EndPeakDateTime = "14:00"
+$HostpoolName = ""
+$BeginPeakDateTime = ""
+$EndPeakDateTime = ""
 $TimeZoneId = "Eastern Standard Time"
-$FullPeak = 4
+$FullPeakHours = 4
+$PeakTimeUserBuffer = 4
 $SessionThresholdPerCPU = 1 #int
 $PeakMinimumNoOfRDSH = 4
 $MinimumNumberOfRDSH = 1 #int
 $LimitSecondsToForceLogOffUser = 120 #int
 $LogOffMessageTitle = "Auto Log Off"
 $LogOffMessageBody = "Your session host is powering down. Please save your work.  Once logged off you can reconnect to an available host."
-$MaintenanceTagName = "Maintenance"
-$HostPoolResourceGroupName = "rg_wvd_spring"
+$MaintenanceTagName = ""
+$HostPoolResourceGroupName = "" 
+
 $WVDConnection = Get-AutomationConnection -Name 'WVDConnection'
 $Connection = Get-AutomationConnection -Name $ConnectionAssetName
-
 
 #Set-ExecutionPolicy -ExecutionPolicy Undefined -Scope Process -Force -Confirm:$false
 #Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope LocalMachine -Force -Confirm:$false
@@ -178,12 +179,15 @@ $functions = {
                         sleep 60
                         $SessionHostIsAvailable = (Get-AzWvdSessionHost -Name $SessionHostName.Split("/")[1] -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostpoolName -SubscriptionId $WVDConnection.SubscriptionId).Status
                         $count++
-                    }while($SessionHostIsAvailable -ne "Available")                    
-                    $status = New-Object -TypeName psobject -Property @{
-                        VMName = $VMName
-                        Started = $true
-                        Cores = $cores
-                    }
+                    }while($SessionHostIsAvailable -ne "Available") 
+                    if($count -ne 10)
+                    {
+                        $status = New-Object -TypeName psobject -Property @{
+                            VMName = $VMName
+                            Started = $true
+                            Cores = $cores
+                        }                        
+                    }                
                     $IsVMStarted = $true
                 }
                 sleep 20
@@ -200,7 +204,7 @@ $functions = {
         )
         $login = Login-ToAzureForWorkspace -WVDConnection $WVDConnection
         $isPeak = $true
-        if ((Get-Date -Date $CurrentDateTime) -ge (Get-Date -Date $BeginPeakDateTime) -and (Get-Date -Date $CurrentDateTime) -le (Get-Date -Date $BeginPeakDateTime).AddHours($FullPeak)) {
+        if ((Get-Date -Date $CurrentDateTime) -ge (Get-Date -Date $BeginPeakDateTime) -and (Get-Date -Date $CurrentDateTime) -le (Get-Date -Date $BeginPeakDateTime).AddHours($FullPeakHours)) {
             $update = Update-AzWvdHostPool -Name $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -SubscriptionId $WVDConnection.SubscriptionId -LoadBalancerType BreadthFirst
         }
         else {
@@ -248,7 +252,16 @@ $functions = {
                         Write-Output "Job $($job.Name) couldn't Be Received"
                     }
                 }
-                if($count -eq 0 -and $count -lt 20)
+                if($count -eq 19)
+                {
+                    $jobsRunning = $false
+                    try {
+                        Get-Job | Stop-Job
+                    } catch{
+
+                    }
+                }
+                if($count -eq 0)
                 {
                     $jobsRunning = $false
                 }
@@ -259,7 +272,11 @@ $functions = {
                 }
             }            
         }
-        Get-Job | Remove-Job
+        try {
+            Get-Job | Remove-Job
+        } catch {
+
+        }
         return $returnData 
     }
 
@@ -269,8 +286,8 @@ $functions = {
     }
 
     $scriptBlockPowerDown = {
-        param($SessionHostName,$HostpoolName,$HostPoolResourceGroupName,$Connection,$WVDConnection)
-        Set-SessionHostPowerState -SessionHostName $SessionHostName -HostpoolName $HostpoolName -HostPoolResourceGroupName $HostPoolResourceGroupName -Connection $Connection -WVDConnection $WVDConnection -powerDown
+        param($SessionHostName,$Connection)
+        Set-SessionHostPowerState -SessionHostName $SessionHostName -Connection $Connection -powerDown
     }
     
     #Converting date time from UTC to Local
@@ -310,7 +327,7 @@ $functions = {
         if($isFullPeakWindow)
         {
             Write-Output "Currently Full Peak Time"
-            $MinimumNumberOfRDSH = $FullPeak
+            $MinimumNumberOfRDSH = $PeakMinimumNoOfRDSH
         } 												   
         $OffPeakUsageMinimumNoOfRDSH = $MinimumNumberOfRDSH
         # Check the number of running session hosts
@@ -358,14 +375,14 @@ $functions = {
             {
                 if($sessionHost.AllowNewSession -ne $true)
                 {
-                    $update = Update-AzWvdSessionHost -Name $sessionHost.Name.Split("/")[1] -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName -SubscriptionId $WVDConnection.SubscriptionId -AllowNewSession $true
+                    $update = Update-AzWvdSessionHost -Name $sessionHost.Name.Split("/")[1] -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName -SubscriptionId $WVDConnection.SubscriptionId -AllowNewSession
                 }
             }
             foreach($sessionHost in $SkipSessionhosts)
             {
-                if($sessionHost.AllowNewSession -ne $true)
+                if($sessionHost.AllowNewSession -ne $false)
                 {
-                    $update = Update-AzWvdSessionHost -Name $sessionHost.Name.Split("/")[1] -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName -SubscriptionId $WVDConnection.SubscriptionId -AllowNewSession $true
+                    $update = Update-AzWvdSessionHost -Name $sessionHost.Name.Split("/")[1] -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName -SubscriptionId $WVDConnection.SubscriptionId -AllowNewSession:$false
                 }
             }
             Write-Output "Current number of running hosts:$NumberOfRunningHost"
@@ -484,7 +501,7 @@ $functions = {
                                     if ($SessionHost.Session -eq 0 -and $RoleInstance.PowerState -eq "VM running") {
                                         # Shutdown the Azure VM, which session host have 0 sessions
                                         Write-Output "Stopping Azure VM: $VMName and waiting for it to complete ..."
-                                        $stoppedVms += Start-Job -InitializationScript $functions -ScriptBlock $scriptBlockPowerDown -ArgumentList @($SessionHost.Name,$HostpoolName,$HostPoolResourceGroupName,$Connection,$WVDConnection) -Name $VMName
+                                        $stoppedVms += Start-Job -InitializationScript $functions -ScriptBlock $scriptBlockPowerDown -ArgumentList @($SessionHost.Name,$Connection) -Name $VMName
                                         $login = Login-ToAzureForSessionHosts -Connection $Connection
                                         $RoleSize = Get-AzVMSize -Location $RoleInstance.Location | Where-Object { $_.Name -eq $RoleInstance.HardwareProfile.VmSize }
                                         $AvailableSessionCapacity = $AvailableSessionCapacity - $RoleSize.NumberOfCores * $SessionThresholdPerCPU
@@ -536,11 +553,11 @@ $functions = {
                 continue
             }
             # Maintenance VMs skipped and stored into a variable
-            $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts -notcontains $_ }
+            $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts -notcontains $_ } | Sort-Object Session
             if ($SessionHostName.ToLower().Contains($RoleInstance.Name.ToLower())) {
                 # Check if the Azure VM is running
                 if ($RoleInstance.PowerState -eq "VM running") {
-                    Write-Output "Checking session host: $($SessionHost.SessionHostName | Out-String)  of sessions:$($SessionHost.Sessions) and status:$($SessionHost.Status)"
+                    Write-Output "Checking session host: $($SessionHost.Name.Split("/")[1])  of sessions:$($SessionHost.Session) and status:$($SessionHost.Status)"
                     [int]$NumberOfRunningHost = [int]$NumberOfRunningHost + 1
                     # Calculate available capacity of sessions  
                     $RoleSize = Get-AzVMSize -Location $RoleInstance.Location | Where-Object { $_.Name -eq $RoleInstance.HardwareProfile.VmSize }
@@ -567,18 +584,18 @@ $functions = {
                 #Check the status of the session host
                 if ($SessionHost.Status -ne "NoHeartbeat") {
                     if ($NumberOfRunningHost -gt $MinimumNumberOfRDSH) {
-                        $SessionHostName = $SessionHost.Name
-                        $VMName = $SessionHostName.Split("/")[1].Split(".")[0]
-                        if ($SessionHost.Sessions -eq 0) {
+                        $SessionHostName = $SessionHost.Name.Split("/")[1]
+                        $VMName = $SessionHostName.Split(".")[0]
+                        if ($SessionHost.Session -eq 0) {
                             # Shutdown the Azure VM, which session host have 0 sessions
                             Write-Output "Stopping Azure VM: $VMName and waiting for it to complete ..."
-                            $stoppedVms += Start-Job -InitializationScript $functions -ScriptBlock $scriptBlockPowerDown -ArgumentList @($SessionHostInfo.Name,$Connection) -Name $VMName
+                            $stoppedVms += Start-Job -InitializationScript $functions -ScriptBlock $scriptBlockPowerDown -ArgumentList @($SessionHost.Name,$Connection) -Name $VMName
                         }
                         else {
                             $login = Login-ToAzureForWorkspace -WVDConnection $WVDConnection
                             # Ensure the running Azure VM is set as drain mode
                             try {                                
-                                $KeepDrianMode = Update-AzWvdSessionHost -Name $SessionHost.Name.Split("/")[1] -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -SubscriptionId $WVDConnection.SubscriptionId -AllowNewSession $false
+                                $KeepDrianMode = Update-AzWvdSessionHost -Name $SessionHostName -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -SubscriptionId $WVDConnection.SubscriptionId -AllowNewSession:$false
                             }
                             catch {
                                 Write-Output "Unable to set it to allow connections on session host: $SessionHostName with error: $($_.exception.message)"
@@ -597,11 +614,11 @@ $functions = {
                             Write-Output "Counting the current sessions on the host $SessionHostName :$HostUserSessionCount"
                             $ExistingSession = 0
                             foreach ($session in $HostPoolUserSessions) {
-                                if ($session.SessionHostName -eq $SessionHostName -and $session.SessionState -eq "Active") {
+                                if ($session.Id -contains $SessionHostName -and $session.SessionState -eq "Active") {
                                     if ($LimitSecondsToForceLogOffUser -ne 0) {
                                         # Send notification
                                         try {
-                                            Send-AzWvdUserSessionMessage -SessionHostName $session.Name.Split("/")[1] -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -MessageTitle $LogOffMessageTitle -MessageBody $LogOffMessageBody -UserSessionId $session.Name.Split("/")[2] -SubscriptionId $WVDConnection.SubscriptionId
+                                            Send-AzWvdUserSessionMessage -SessionHostName $SessionHostName -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -MessageTitle $LogOffMessageTitle -MessageBody $LogOffMessageBody -UserSessionId $session.Id.Split("/")[-1] -SubscriptionId $WVDConnection.SubscriptionId
                                         }
                                         catch {
                                             Write-Output "Failed to send message to user with error: $($_.exception.message)"
@@ -613,23 +630,26 @@ $functions = {
                                 $ExistingSession = $ExistingSession + 1
                             }
                             # Wait for n seconds to log off user
-                            Start-Sleep -Seconds $LimitSecondsToForceLogOffUser
+                            if($ExistingSession -ne 0)
+                            {                                
+                                Start-Sleep -Seconds $LimitSecondsToForceLogOffUser
+                            }
 
-                            if ($LimitSecondsToForceLogOffUser -ne 0) {
+                            if ($LimitSecondsToForceLogOffUser -ne 0 -and $ExistingSession -gt 0) {
                                 # Force users to log off
                                 Write-Output "Force users to log off ..."
                                 foreach ($Session in $HostPoolUserSessions) {
-                                    if ($Session.SessionHostName -eq $SessionHostName) {
+                                    if ($Session.Id -contains $SessionHostName) {
                                         #Log off user
                                         try {
-                                            Invoke-RdsUserSessionLogoff -TenantName $TenantName -HostPoolName $HostpoolName -SessionHostName $Session.SessionHostName -SessionId $Session.SessionId -NoUserPrompt -ErrorAction Stop
+                                            Disconnect-AzWvdUserSession -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -Id $Session.Id.Split("/")[-1] -SessionHostName $SessionHostName
                                             $ExistingSession = $ExistingSession - 1
                                         }
                                         catch {
                                             Write-Output "Failed to log off user with error: $($_.exception.message)"
                                             exit
                                         }
-                                        Write-Output "Forcibly logged off the user: $($Session.UserPrincipalName | Out-String)"
+                                        Write-Output "Forcibly logged off the user: $($Session.UserPrincipalName)"
                                     }
                                 }
                             }
@@ -637,30 +657,10 @@ $functions = {
                             if ($ExistingSession -eq 0) {
                                 # Shutdown the Azure VM
                                 Write-Output "Stopping Azure VM: $VMName and waiting for it to complete ..."
-                                Stop-SessionHost -VMName $VMName
+                                $stoppedVms += Start-Job -InitializationScript $functions -ScriptBlock $scriptBlockPowerDown -ArgumentList @($SessionHost.Name,$Connection) -Name $VMName
                             }
                         }
                         #wait for the VM to stop
-                        $IsVMStopped = $false
-                        while (!$IsVMStopped) {
-                            $RoleInstance = Get-AzVM -Status | Where-Object { $_.Name -eq $VMName }
-                            if ($RoleInstance.PowerState -eq "VM deallocated") {
-                                $IsVMStopped = $true
-                                Write-Output "Azure VM has been stopped: $($RoleInstance.Name) ..."
-                            }
-                        }
-                        # Check if the session host status is NoHeartbeat                            
-                        $IsSessionHostNoHeartbeat = $false
-                        while (!$IsSessionHostNoHeartbeat) {
-                            $SessionHostInfo = Get-RdsSessionHost -TenantName $TenantName -HostPoolName $HostpoolName -Name $SessionHostName
-                            if ($SessionHostInfo.UpdateState -eq "Succeeded" -and $SessionHostInfo.Status -eq "NoHeartbeat") {
-                                $IsSessionHostNoHeartbeat = $true
-                                # Ensure the Azure VMs that are off have allow new connections mode set to True
-                                if ($SessionHostInfo.AllowNewSession -eq $false) {
-                                    Check-ForAllowNewConnections -TenantName $TenantName -HostPoolName $HostpoolName -SessionHostName $SessionHostName
-                                }
-                            }
-                        }
                         $RoleSize = Get-AzVMSize -Location $RoleInstance.Location | Where-Object { $_.Name -eq $RoleInstance.HardwareProfile.VmSize }
                         #decrement number of running session host
                         [int]$NumberOfRunningHost = [int]$NumberOfRunningHost - 1
@@ -668,6 +668,8 @@ $functions = {
                     }
                 }
             }
+            
+            Get-DataFromJobs -jobs $stoppedVms
         }
         $OffPeakUsageMinimumNoOfRDSH = $MinimumNumberOfRDSH
         if ($OffPeakUsageMinimumNoOfRDSH) {
@@ -682,12 +684,11 @@ $functions = {
                 $NoConnectionsofhost = $NoConnectionsofhost - $DefinedMinimumNumberOfRDSH
                 if ($NoConnectionsofhost -gt $DefinedMinimumNumberOfRDSH) {
                     [int]$MinimumNumberOfRDSH = [int]$MinimumNumberOfRDSH - $NoConnectionsofhost
-                    Set-AzAutomationVariable -Name "$HostpoolName-OffPeakUsage-MinimumNoOfRDSH" -ResourceGroupName $AutomationAccount.ResourceGroupName -AutomationAccountName $AutomationAccount.AutomationAccountName -Encrypted $false -Value $MinimumNumberOfRDSH
                 }
             }
         }
         $HostpoolMaxSessionLimit = $HostpoolInfo.MaxSessionLimit
-        $HostpoolSessionCount = (Get-RdsUserSession -TenantName $TenantName -HostPoolName $HostpoolName).Count
+        $HostpoolSessionCount = (Get-AzWvdUserSession -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -SubscriptionId $WVDConnection.SubscriptionId).Count
         if ($HostpoolSessionCount -ne 0) {
             # Calculate the how many sessions will allow in minimum number of RDSH VMs in off peak hours and calculate TotalAllowSessions Scale Factor
             $TotalAllowSessionsInOffPeak = [int]$MinimumNumberOfRDSH * $HostpoolMaxSessionLimit
@@ -695,37 +696,19 @@ $functions = {
             $ScaleFactor = [math]::Floor($SessionsScaleFactor)
 
             if ($HostpoolSessionCount -ge $ScaleFactor) {
-                $ListOfSessionHosts = Get-RdsSessionHost -TenantName $TenantName -HostPoolName $HostpoolName | Where-Object { $_.Status -eq "NoHeartbeat" }
+                $ListOfSessionHosts = Get-AzWvdSessionHost -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostpoolName -SubscriptionId $WVDConnection.SubscriptionId | Where-Object { $_.Status -eq "NoHeartbeat" }
                 #$AllSessionHosts = Compare-Object $ListOfSessionHosts $SkipSessionhosts | Where-Object { $_.SideIndicator -eq '<=' } | ForEach-Object { $_.InputObject }
                 $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts -notcontains $_ }
+                $startedVms = @()
                 foreach ($SessionHost in $AllSessionHosts) {
                     # Check the session host status and if the session host is healthy before starting the host
                     if ($SessionHost.UpdateState -eq "Succeeded") {
                         Write-Output "Existing sessionhost sessions value reached near by hostpool maximumsession limit need to start the session host"
-                        $SessionHostName = $SessionHost.SessionHostName | Out-String
+                        $SessionHostName = $SessionHost.Name.Split("/")[1]
                         $VMName = $SessionHostName.Split(".")[0]
-                        # Validating session host is allowing new connections
-                        Check-ForAllowNewConnections -TenantName $TenantName -HostPoolName $HostpoolName -SessionHostName $SessionHost.SessionHostName
                         # Start the Az VM
                         Write-Output "Starting Azure VM: $VMName and waiting for it to complete ..."
-                        Start-SessionHost -VMName $VMName
-                        #Wait for the VM to start
-                        $IsVMStarted = $false
-                        while (!$IsVMStarted) {
-                            $RoleInstance = Get-AzVM -Status | Where-Object { $_.Name -eq $VMName }
-                            if ($RoleInstance.PowerState -eq "VM running") {
-                                $IsVMStarted = $true
-                                Write-Output "Azure VM has been started: $($RoleInstance.Name) ..."
-                            }
-                        }
-                        # Wait for the sessionhost is available
-                        $SessionHostIsAvailable = Check-IfSessionHostIsAvailable -TenantName $TenantName -HostPoolName $HostpoolName -SessionHost $SessionHost.SessionHostName
-                        if ($SessionHostIsAvailable) {
-                            Write-Output "'$($SessionHost.SessionHostName | Out-String)' session host status is 'Available'"
-                        }
-                        else {
-                            Write-Output "'$($SessionHost.SessionHostName | Out-String)' session host does not configured properly with deployagent or does not started properly"
-                        }
+                        $startedVms += Start-Job -InitializationScript $functions -ScriptBlock $scriptBlockPowerOn -ArgumentList @($SessionHost.Name,$HostpoolName,$HostPoolResourceGroupName,$Connection,$WVDConnection) -Name $VMName
                         # Increment the number of running session host
                         [int]$NumberOfRunningHost = [int]$NumberOfRunningHost + 1
                         # Increment the number of minimumnumberofrdsh
@@ -745,6 +728,7 @@ $functions = {
                         break
                     }
                 }
+                Get-DataFromJobs -jobs $startedVms
             }
 
         }

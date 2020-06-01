@@ -688,6 +688,7 @@ $functions = {
             }
         }
         $HostpoolMaxSessionLimit = $HostpoolInfo.MaxSessionLimit
+        $login = Login-ToAzureForWorkspace -WVDConnection $WVDConnection
         $HostpoolSessionCount = (Get-AzWvdUserSession -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -SubscriptionId $WVDConnection.SubscriptionId).Count
         if ($HostpoolSessionCount -ne 0) {
             # Calculate the how many sessions will allow in minimum number of RDSH VMs in off peak hours and calculate TotalAllowSessions Scale Factor

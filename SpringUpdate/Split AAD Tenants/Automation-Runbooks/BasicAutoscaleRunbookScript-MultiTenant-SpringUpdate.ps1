@@ -16,9 +16,6 @@ $HostPoolResourceGroupName = ""
 $WVDConnection = Get-AutomationConnection -Name 'WVDConnection'
 $Connection = Get-AutomationConnection -Name $ConnectionAssetName
 
-#Set-ExecutionPolicy -ExecutionPolicy Undefined -Scope Process -Force -Confirm:$false
-#Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope LocalMachine -Force -Confirm:$false
-# Setting ErrorActionPreference to stop script execution when error occurs
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 #Function to convert from UTC to Local time
@@ -195,6 +192,48 @@ $functions = {
         }
         return $status
     }
+
+    function Start-LogoffAndPowerDown
+    {
+        param(
+            $ExistingSession,
+            $LimitSecondsToForceLogOffUser,
+            $HostPoolUserSessions,
+            $SessionHost,
+            $HostpoolName,
+            $HostPoolResourceGroupName,
+            $Connection
+        )
+        if($ExistingSession -ne 0)
+        {                                
+            Start-Sleep -Seconds $LimitSecondsToForceLogOffUser
+        }
+        $SessionHostName = $SessionHost.Name.Split("/")[1]
+        $VMName = $SessionHostName.Split(".")[0]
+        if ($LimitSecondsToForceLogOffUser -ne 0 -and $ExistingSession -gt 0) {
+            # Force users to log off
+            Write-Output "Force users to log off ..."
+            foreach ($Session in $HostPoolUserSessions) {
+                if ($Session.Name.Split("/")[1] -eq $SessionHostName) {
+                    #Log off user
+                    try {
+                        Disconnect-AzWvdUserSession -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -Id $Session.Id.Split("/")[-1] -SessionHostName $SessionHostName
+                        $ExistingSession = $ExistingSession - 1
+                    }
+                    catch {
+                        Write-Output "Failed to log off user with error: $($_.exception.message)"
+                        exit
+                    }
+                    Write-Output "Forcibly logged off the user: $($Session.UserPrincipalName)"
+                }
+            }
+        }
+        # Check the session count before shutting down the VM
+        
+        Write-Output "Stopping Azure VM: $VMName and waiting for it to complete ..."
+        $data = Set-SessionHostPowerState -SessionHostName $SessionHost.Name -Connection $Connection -powerDown
+        return $data        
+    }
 } 
 
     function Get-FullPeakWindow
@@ -288,6 +327,11 @@ $functions = {
     $scriptBlockPowerDown = {
         param($SessionHostName,$Connection)
         Set-SessionHostPowerState -SessionHostName $SessionHostName -Connection $Connection -powerDown
+    }
+
+    $scriptBlockPowerWithSessions = {
+        param($ExistingSession,$LimitSecondsToForceLogOffUser,$HostPoolUserSessions,$SessionHost,$HostpoolName,$HostPoolResourceGroupName,$Connection)
+        Start-LogoffAndPowerDown -ExistingSession $ExistingSession -LimitSecondsToForceLogOffUser $LimitSecondsToForceLogOffUser -HostPoolUserSessions $HostPoolUserSessions -SessionHost $SessionHost -HostpoolName $HostpoolName -HostPoolResourceGroupName $HostPoolResourceGroupName -Connection $Connection
     }
     
     #Converting date time from UTC to Local
@@ -431,7 +475,7 @@ $functions = {
                     Write-Output "VMs Already Running"
                 }
             }
-            if ($isFullPeakWindow -ne $true) {
+            #if ($isFullPeakWindow -ne $true) {
             #check if the available capacity meets the number of sessions or not
             Write-Output "Current total number of user sessions: $(($HostPoolUserSessions).Count)"
             Write-Output "Current available session capacity is: $AvailableSessionCapacity"
@@ -526,7 +570,7 @@ $functions = {
                     }
                 }
             }
-        }           
+       # }           
     }
     else {
         Write-Output "It is Off-peak hours"
@@ -553,7 +597,7 @@ $functions = {
                 continue
             }
             # Maintenance VMs skipped and stored into a variable
-            $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts -notcontains $_ } | Sort-Object Session
+            $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts -notcontains $_ -and $_.Status -eq "Available"} | Sort-Object Session
             if ($SessionHostName.ToLower().Contains($RoleInstance.Name.ToLower())) {
                 # Check if the Azure VM is running
                 if ($RoleInstance.PowerState -eq "VM running") {
@@ -610,11 +654,11 @@ $functions = {
                                 Write-Output "Failed to retrieve user sessions in hostpool: $($Name) with error: $($_.exception.message)"
                                 exit
                             }
-                            $HostUserSessionCount = ($HostPoolUserSessions | Where-Object -FilterScript { $_.Name -contains $SessionHostName }).Count
+                            $HostUserSessionCount = ($HostPoolUserSessions | ?{$_.Name.Split("/")[1] -eq $SessionHostName}).Count
                             Write-Output "Counting the current sessions on the host $SessionHostName :$HostUserSessionCount"
                             $ExistingSession = 0
                             foreach ($session in $HostPoolUserSessions) {
-                                if ($session.Id -contains $SessionHostName -and $session.SessionState -eq "Active") {
+                                if ($session.Name.Split("/")[1] -eq  $SessionHostName -and $session.SessionState -eq "Active") {
                                     if ($LimitSecondsToForceLogOffUser -ne 0) {
                                         # Send notification
                                         try {
@@ -631,33 +675,9 @@ $functions = {
                             }
                             # Wait for n seconds to log off user
                             if($ExistingSession -ne 0)
-                            {                                
-                                Start-Sleep -Seconds $LimitSecondsToForceLogOffUser
-                            }
-
-                            if ($LimitSecondsToForceLogOffUser -ne 0 -and $ExistingSession -gt 0) {
-                                # Force users to log off
-                                Write-Output "Force users to log off ..."
-                                foreach ($Session in $HostPoolUserSessions) {
-                                    if ($Session.Id -contains $SessionHostName) {
-                                        #Log off user
-                                        try {
-                                            Disconnect-AzWvdUserSession -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -Id $Session.Id.Split("/")[-1] -SessionHostName $SessionHostName
-                                            $ExistingSession = $ExistingSession - 1
-                                        }
-                                        catch {
-                                            Write-Output "Failed to log off user with error: $($_.exception.message)"
-                                            exit
-                                        }
-                                        Write-Output "Forcibly logged off the user: $($Session.UserPrincipalName)"
-                                    }
-                                }
-                            }
-                            # Check the session count before shutting down the VM
-                            if ($ExistingSession -eq 0) {
-                                # Shutdown the Azure VM
-                                Write-Output "Stopping Azure VM: $VMName and waiting for it to complete ..."
-                                $stoppedVms += Start-Job -InitializationScript $functions -ScriptBlock $scriptBlockPowerDown -ArgumentList @($SessionHost.Name,$Connection) -Name $VMName
+                            { 
+                                $stoppedVms += Start-Job -InitializationScript $functions -Name $VMName -ScriptBlock $scriptBlockPowerWithSessions -ArgumentList @($ExistingSession,$LimitSecondsToForceLogOffUser,$HostPoolUserSessions,$SessionHost,$HostpoolName,$HostPoolResourceGroupName,$Connection)                               
+                                #Start-Sleep -Seconds $LimitSecondsToForceLogOffUser
                             }
                         }
                         #wait for the VM to stop

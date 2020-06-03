@@ -2,7 +2,16 @@
 
 > Modified version of the Autoscaling script published: https://docs.microsoft.com/en-us/azure/virtual-desktop/virtual-desktop-fall-2019/set-up-scaling-script .  Most basic functionality of the original is working.  Still testing
 
-> This is to Autoscale Hostpools deployed with the Spring Update, and modify scaling behavior to meet my deployment needs.  Currently only Peak Time scaling works.
+> This is to Autoscale Hostpools deployed with the Spring Update, and modify scaling behavior to meet my deployment needs.  
+
+> Modules need to be imported to the Azure Automation Account
+```
+Az.Accounts
+Az.Compute
+Az.Network
+Az.Resources
+Az.DesktopVirtualization
+```
 
 > Variable Overview
 ```

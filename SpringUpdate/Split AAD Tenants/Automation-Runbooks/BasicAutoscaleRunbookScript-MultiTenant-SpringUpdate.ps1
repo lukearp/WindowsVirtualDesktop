@@ -11,7 +11,8 @@ $LimitSecondsToForceLogOffUser = 120 #int
 $LogOffMessageTitle = "Auto Log Off"
 $LogOffMessageBody = "Your session host is powering down. Please save your work.  Once logged off you can reconnect to an available host."
 $MaintenanceTagName = ""
-$HostPoolResourceGroupName = "" 
+$HostPoolResourceGroupName = ""
+$ConnectionAssetName = "AzureRunAsAccount" 
 
 $WVDConnection = Get-AutomationConnection -Name 'WVDConnection'
 $Connection = Get-AutomationConnection -Name $ConnectionAssetName

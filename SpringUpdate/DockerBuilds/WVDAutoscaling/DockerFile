@@ -1,0 +1,35 @@
+FROM mcr.microsoft.com/dotnet/core/sdk:3.1
+
+ENV base64=certData
+ENV certPass=pass
+ENV thumbprint=tumbprint
+ENV HostpoolName=HostpoolName
+ENV HostPoolResourceGroupName=HostPoolResourceGroupName
+ENV BeginPeakDateTime=7:00
+ENV EndPeakDateTime=17:00
+ENV TimeZoneId=America/New_York
+ENV FullPeakHours=2
+ENV PeakTimeUserBuffer=2
+ENV SessionThresholdPerCPU=1
+ENV PeakMinimumNoOfRDSH=3
+ENV MinimumNumberOfRDSH=1
+ENV LimitSecondsToForceLogOffUser=120
+ENV LogOffMessageTitle="Auto Log Off"
+ENV LogOffMessageBody="Your session host is powering down. Please save your work.  Once logged off you can reconnect to an available host."
+ENV MaintenanceTagName=Maintenance
+ENV WVDApplicationId=appId
+ENV WVDTenantId=TenantId
+ENV WVDSubscriptionId=SubscriptionId
+ENV AzApplicationId=appId
+ENV AzTenantId=TenantId
+ENV AzSubscriptionId=SubscriptionId
+
+RUN dotnet tool install --global PowerShell --version 7.0.1 &&\
+    dotnet tool install --global dotnet-certificate-tool &&\
+    export PATH="$PATH:/root/.dotnet/tools"
+
+RUN /root/.dotnet/tools/pwsh -Command Install-Module Az -Force
+
+COPY BasicAutoscaleRunbookScript-MultiTenant-SpringUpdate.ps1 /BasicAutoscaleRunbookScript-MultiTenant-SpringUpdate.ps1
+
+ENTRYPOINT [ "/root/.dotnet/tools/pwsh","/BasicAutoscaleRunbookScript-MultiTenant-SpringUpdate.ps1" ]

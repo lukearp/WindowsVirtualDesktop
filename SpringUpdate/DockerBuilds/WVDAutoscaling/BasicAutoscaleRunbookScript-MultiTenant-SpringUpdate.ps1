@@ -407,11 +407,11 @@ $functions = {
             {
                 if ($RoleInstance.Tags.Keys -contains $MaintenanceTagName) {
                     Write-Output "Session host is in maintenance: $VMName, so script will skip this VM"
-                    $SkipSessionhosts += $SessionHost.Name
+                    $SkipSessionhosts += $SessionHost
                     continue
                 }
                 #$AllSessionHosts = Compare-Object $ListOfSessionHosts $SkipSessionhosts | Where-Object { $_.SideIndicator -eq '<=' } | ForEach-Object { $_.InputObject }
-                $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts -notcontains $_.Name }
+                $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts.Name -notcontains $_.Name }
 
                 Write-Output "Checking session host: $($SessionHostName)  of sessions: $($SessionHost.Session) and status: $($SessionHost.Status)"
                 if ($SessionHostName.ToLower().Contains($RoleInstance.Name.ToLower())) {

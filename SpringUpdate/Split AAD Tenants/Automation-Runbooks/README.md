@@ -4,7 +4,7 @@
 
 > This is to Autoscale Hostpools deployed with the Spring Update, and modify scaling behavior to meet my deployment needs.  
 
-> Modules need to be imported to the Azure Automation Account
+> Modules needed to be installed to run
 ```
 Az.Accounts
 Az.Compute

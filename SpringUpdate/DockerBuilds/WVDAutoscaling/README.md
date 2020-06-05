@@ -1,5 +1,8 @@
 # Docker container to manage Host Pool Autoscaling
-
+> Clone repo, browse to /SpringUpdate/DockerBuilds/WVDAutoscaling and run:
+```
+docker build -t "NameOfContainer" .
+```
 > Environmental Variables Required to Run
 ```
 base64={PFX in Base64 format}

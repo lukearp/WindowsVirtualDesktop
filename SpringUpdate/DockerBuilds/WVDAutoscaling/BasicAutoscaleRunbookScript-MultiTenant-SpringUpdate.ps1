@@ -491,7 +491,7 @@ $functions = {
             #check if the available capacity meets the number of sessions or not
             Write-Output "Current total number of user sessions: $(($HostPoolUserSessions).Count)"
             Write-Output "Current available session capacity is: $AvailableSessionCapacity"
-            if ($HostPoolUserSessions.Count -ge $AvailableSessionCapacity) {
+            if ($HostPoolUserSessions.Count -gt $AvailableSessionCapacity) {
                 Write-Output "Current available session capacity is less than demanded user sessions, starting session host"
                 # Running out of capacity, we need to start more VMs if there are any 
                 foreach ($SessionHost in $AllSessionHosts.Name) {

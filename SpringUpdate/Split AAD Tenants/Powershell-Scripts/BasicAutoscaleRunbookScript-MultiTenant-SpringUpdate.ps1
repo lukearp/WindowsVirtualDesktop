@@ -14,8 +14,19 @@ $MaintenanceTagName = ""
 $HostPoolResourceGroupName = ""
 $ConnectionAssetName = "AzureRunAsAccount" 
 
-$WVDConnection = Get-AutomationConnection -Name 'WVDConnection'
-$Connection = Get-AutomationConnection -Name $ConnectionAssetName
+$WVDConnection = New-Object -TypeName psobject -Property @{
+    ApplicationId = $WVDApplicationId
+    TenantId = $WVDTenantId
+    CertificateThumbprint = $thumbprint
+    SubscriptionId = $WVDSubscriptionId
+}
+
+$Connection = New-Object -TypeName psobject -Property @{
+    ApplicationId = $AzApplicationId
+    TenantId = $AzTenantId
+    CertificateThumbprint = $thumbprint
+    SubscriptionId = $AzSubscriptionId
+} 
 
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -23,7 +34,7 @@ $ErrorActionPreference = "Stop"
 function Convert-UTCtoLocalTime {
     $timezoneInfo = Get-TimeZone -Id $TimeZoneId    
     $inputDateTime = Get-Date -Date (Get-Date).ToUniversalTime() -f s
-    $time = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId($inputDateTime, "UTC", $timezoneInfo.StandardName)
+    $time = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId($inputDateTime, "UTC", $timezoneInfo.Id)
     
     return Get-Date -Date $time -Format "HH:mm"
 }
@@ -396,11 +407,11 @@ $functions = {
             {
                 if ($RoleInstance.Tags.Keys -contains $MaintenanceTagName) {
                     Write-Output "Session host is in maintenance: $VMName, so script will skip this VM"
-                    $SkipSessionhosts += $SessionHost.Name
+                    $SkipSessionhosts += $SessionHost
                     continue
                 }
                 #$AllSessionHosts = Compare-Object $ListOfSessionHosts $SkipSessionhosts | Where-Object { $_.SideIndicator -eq '<=' } | ForEach-Object { $_.InputObject }
-                $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts -notcontains $_.Name }
+                $AllSessionHosts = $ListOfSessionHosts | Where-Object { $SkipSessionhosts.Name -notcontains $_.Name }
 
                 Write-Output "Checking session host: $($SessionHostName)  of sessions: $($SessionHost.Session) and status: $($SessionHost.Status)"
                 if ($SessionHostName.ToLower().Contains($RoleInstance.Name.ToLower())) {
@@ -480,13 +491,13 @@ $functions = {
             #check if the available capacity meets the number of sessions or not
             Write-Output "Current total number of user sessions: $(($HostPoolUserSessions).Count)"
             Write-Output "Current available session capacity is: $AvailableSessionCapacity"
-            if ($HostPoolUserSessions.Count -ge $AvailableSessionCapacity) {
+            if ($HostPoolUserSessions.Count -gt $AvailableSessionCapacity) {
                 Write-Output "Current available session capacity is less than demanded user sessions, starting session host"
                 # Running out of capacity, we need to start more VMs if there are any 
                 foreach ($SessionHost in $AllSessionHosts.Name) {
                     if ($HostPoolUserSessions.Count -ge $AvailableSessionCapacity) {
                         $VMName = $SessionHost.Split("/")[1].Split(".")[0]
-                        $login = Login-ToAzureForSessionHosts
+                        $login = Login-ToAzureForSessionHosts -Connection $Connection
                         $RoleInstance = Get-AzVM -Status | Where-Object { $_.Name.Contains($VMName) }
 
                         if ($SessionHost.ToLower().Contains($RoleInstance.Name.ToLower())) {

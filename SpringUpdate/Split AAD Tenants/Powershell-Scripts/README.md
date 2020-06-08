@@ -29,4 +29,10 @@ $LogOffMessageTitle = "Auto Log Off" # Title of pop up screen to users
 $LogOffMessageBody = "Your session host is powering down. Please save your work.  Once logged off you can reconnect to an available host." # Message sent to users
 $MaintenanceTagName = "Maintenance" # Azure Tag, that if pressent puts Session Host's AllowNewSessions Property to False
 $HostPoolResourceGroupName = "" # Resource Group of the Host Pool WVD Object
+WVDApplicationId= "" # AAD App ID that has Contributor rights to the WVD Host Pool
+WVDTenantId= "" # AAD App Tenant ID that has Contributor rights to the WVD Host Pool
+WVDSubscriptionId= "" # Azure Subscription Id that has the WVD Host Pool
+AzApplicationId= "" # AAD App ID that has rights to the WVD Session Hosts to Power On and Power Off
+AzTenantId= "" # AAD App Tenant ID that has rights to the WVD Session Hosts to Power On and Power Off
+AzSubscriptionId= "" # Azure Subscription Id that has the WVD Session Hosts running
 ```

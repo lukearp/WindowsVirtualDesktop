@@ -396,8 +396,7 @@ $functions = {
         $SkipSessionhosts = 0
         $SkipSessionhosts = @()
         $login = Login-ToAzureForWorkspace -WVDConnection $WVDConnection
-        $HostPoolUserSessions = Get-AzWvdUserSession -HostPoolName $HostpoolName -ResourceGroupName $HostPoolResourceGroupName -SubscriptionId $WVDConnection.SubscriptionId
-        $login = Login-ToAzureForSessionHosts -Connection $Connection
+        $HostPoolUserSessions = Get-AzWvdUserSession -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostpoolName -SubscriptionId $WVDConnection.SubscriptionId | ?{$_.SessionState -eq "Active"}        $login = Login-ToAzureForSessionHosts -Connection $Connection
         foreach ($SessionHost in $ListOfSessionHosts) {
             $SessionHostName = $SessionHost.Name.Split("/")[1];
             $VMName = $SessionHostName.Split(".")[0]
@@ -660,8 +659,7 @@ $functions = {
                             # Notify user to log off session
                             # Get the user sessions in the hostpool
                             try {
-                                $HostPoolUserSessions = Get-AzWvdUserSession -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostpoolName -SubscriptionId $WVDConnection.SubscriptionId
-                            }
+                                $HostPoolUserSessions = Get-AzWvdUserSession -ResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostpoolName -SubscriptionId $WVDConnection.SubscriptionId | ?{$_.SessionState -eq "Active"}                            }
                             catch {
                                 Write-Output "Failed to retrieve user sessions in hostpool: $($Name) with error: $($_.exception.message)"
                                 exit

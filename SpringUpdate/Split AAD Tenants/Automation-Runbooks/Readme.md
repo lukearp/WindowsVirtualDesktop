@@ -41,19 +41,21 @@
 ```
 
 ## Parameter Overview
-> BeginPeakTime             Time that Peak time starts.  User 24 hour clock Ex: 09:00 = 9am 14:00 = 2pm
-> EndPeakTime               Time that Peak time ends.  User 24 hour clock Ex: 09:00 = 9am 14:00 = 2pm
-> TimeZoneId                Time zone your sessions hosts are supporting. Ex: "Eastern Standard Time"
-> ConnectionAssetName       Automation Connection name tied to AAD Service Principal for managing Azure VMs
-> WVDConnectionAssetName    Automation Connection name tied to AAD Service Principal for managing Azure WVD Resources
-> HostPoolName              WVD Host pool name
-> ResourceGroupName         Azure resource group name that has the WVD Host Pool object
-> LogAnalyticsWorkspaceId   Log analytics workspace for Automation logging (Optional)
-> LogAnalyticsWorkspaceId   Workspace Key (Optional)
-> MinimumNumberOfRDSH       Minimum number of running hosts in WVD Host pool
-> SessionThresholdPerCPU    Number of active user sessions per session host core
-> LogOffMessageTitle        Title of message window that will appear to active users on hosts that are scaling down
-> LogOffMessageBody         Contents of message window
+```
+BeginPeakTime             Time that Peak time starts.  User 24 hour clock Ex: 09:00 = 9am 14:00 = 2pm
+EndPeakTime               Time that Peak time ends.  User 24 hour clock Ex: 09:00 = 9am 14:00 = 2pm
+TimeZoneId                Time zone your sessions hosts are supporting. Ex: "Eastern Standard Time"
+ConnectionAssetName       Automation Connection name tied to AAD Service Principal for managing Azure VMs
+WVDConnectionAssetName    Automation Connection name tied to AAD Service Principal for managing Azure WVD Resources
+HostPoolName              WVD Host pool name
+ResourceGroupName         Azure resource group name that has the WVD Host Pool object
+LogAnalyticsWorkspaceId   Log analytics workspace for Automation logging (Optional)
+LogAnalyticsWorkspaceId   Workspace Key (Optional)
+MinimumNumberOfRDSH       Minimum number of running hosts in WVD Host pool
+SessionThresholdPerCPU    Number of active user sessions per session host core
+LogOffMessageTitle        Title of message window that will appear to active users on hosts that are scaling down
+LogOffMessageBody         Contents of message window
+```
 
 ## Feature Enhancements
 > This script is based on the Offical scaling script: https://github.com/nakranimohit0/azure-docs/blob/yammer_private_preview_wvd_scaling/articles/virtual-desktop/set-up-scaling-script.md

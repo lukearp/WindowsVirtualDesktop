@@ -491,11 +491,11 @@ $functions = {
             #check if the available capacity meets the number of sessions or not
             Write-Output "Current total number of user sessions: $(($HostPoolUserSessions).Count)"
             Write-Output "Current available session capacity is: $AvailableSessionCapacity"
-            if ($HostPoolUserSessions.Count -gt $AvailableSessionCapacity) {
+            if (($HostPoolUserSessions.Count + $PeakTimeUserBuffer ) -gt $AvailableSessionCapacity) {
                 Write-Output "Current available session capacity is less than demanded user sessions, starting session host"
                 # Running out of capacity, we need to start more VMs if there are any 
                 foreach ($SessionHost in $AllSessionHosts.Name) {
-                    if ($HostPoolUserSessions.Count -ge $AvailableSessionCapacity) {
+                    if (($HostPoolUserSessions.Count + $PeakTimeUserBuffer ) -ge $AvailableSessionCapacity) {
                         $VMName = $SessionHost.Split("/")[1].Split(".")[0]
                         $login = Login-ToAzureForSessionHosts -Connection $Connection
                         $RoleInstance = Get-AzVM -Status | Where-Object { $_.Name.Contains($VMName) }
@@ -519,7 +519,7 @@ $functions = {
                                 [int]$NumberOfRunningHost = [int]$NumberOfRunningHost + 1
                                 [int]$TotalRunningCores = [int]$TotalRunningCores + $RoleSize.NumberOfCores
                                 Write-Output "New available session capacity is: $AvailableSessionCapacity"
-                                if ($AvailableSessionCapacity -gt $HostPoolUserSessions.Count) {
+                                if ($AvailableSessionCapacity -ge ($HostPoolUserSessions.Count + $PeakTimeUserBuffer )) {
                                     break
                                 }
                             }

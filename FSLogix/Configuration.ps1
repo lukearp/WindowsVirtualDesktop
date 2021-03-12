@@ -82,7 +82,7 @@ configuration AddSessionHost
                 & "$using:ScriptPath\FSLogixInstall.ps1" -uncPath $using:uncPath
             }
             TestScript = {
-                return (Test-path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\FSLogix\Profiles\VHDLocations")
+                return (Test-path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\FSLogix")
             }
         }
     }
